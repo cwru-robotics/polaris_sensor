@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(polaris_sensor)
 
+find_package(Eigen3)
+set(Eigen3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
+set(Eigen3_DEP Eigen3)
+add_definitions(${EIGEN_DEFINITIONS})
+
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   roscpp
@@ -8,6 +13,8 @@ find_package(catkin REQUIRED COMPONENTS
   serial
   cmake_modules
   message_generation
+  cwru_msgs
+  xform_utils
 )
 
 add_message_files(
@@ -23,9 +30,10 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 find_package(Boost COMPONENTS system filesystem REQUIRED)
 
 catkin_package(
-  INCLUDE_DIRS include
+  DEPENDS ${Eigen3_DEP}
+  INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIRS}
   LIBRARIES polaris_sensor
-  CATKIN_DEPENDS geometry_msgs roscpp serial sensor_msgs message_runtime
+  CATKIN_DEPENDS geometry_msgs roscpp serial sensor_msgs message_runtime cwru_msgs xform_utils
 )
 
 include_directories(include)
@@ -33,6 +41,7 @@ include_directories(
   include
   ${Boost_INCLUDE_DIR}
   ${catkin_INCLUDE_DIRS}
+  ${Eigen3_INCLUDE_DIRS}
 )
 
 add_library(${PROJECT_NAME}

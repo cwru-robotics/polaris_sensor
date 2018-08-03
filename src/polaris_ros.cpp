@@ -1,4 +1,3 @@
-// ROS
 #include <ros/ros.h>
 #include <geometry_msgs/PoseArray.h>
 #include <sensor_msgs/PointCloud.h>
@@ -11,6 +10,12 @@
 #include <fstream>
 #include <std_msgs/Float32.h>
 #include <std_msgs/Float64MultiArray.h>
+
+#include <cwru_msgs/VecOfPoseAffinesStamped.h>
+#include <xform_utils/xform_utils.h>
+
+#include <Eigen/Eigen>
+
 #include <ctime>
 #include <iostream>
 bool fexists(const std::string& filename) {
@@ -44,6 +49,7 @@ int main(int argc, char **argv)
     ros::Publisher cloud_pub = nh.advertise<sensor_msgs::PointCloud>("targets_cloud", 1);
     ros::Publisher dt_pub = nh.advertise<std_msgs::Float32>("dt", 1);
     ros::Publisher raw_pub = nh.advertise<polaris_sensor::StrayMarker>("stray_markers", 1);
+    ros::Publisher affine_pub = nh.advertise<cwru_msgs::VecOfPoseAffinesStamped>("targets_4x4", 1);
 
     std::string port("/dev/ttyUSB0");
     if(!nh.getParam("port",port))
@@ -73,25 +79,30 @@ int main(int argc, char **argv)
        ROS_FATAL("No roms could be loaded, exiting.");
        return -2;
    }
+    
     int n = roms.size();
     Polaris polaris(port,roms);
 
     geometry_msgs::PoseArray targets_pose;
+    cwru_msgs::VecOfPoseAffinesStamped targets_affine;
     sensor_msgs::PointCloud targets_cloud;
     polaris_sensor::StrayMarker raw_points;
 
     targets_cloud.header.frame_id = "/"+camera+"_link";
     targets_pose.header.frame_id = "/"+camera+"_link";
+    targets_affine.header.frame_id = "/"+camera+"_link";
 
     ros::Rate loop_rate(100);
     int count = 0;
     ROS_INFO("Starting Polaris tracker loop");
     for(int i=0;i<n;++i){
       targets_pose.poses.push_back(geometry_msgs::Pose());
+      targets_affine.poses.push_back(cwru_msgs::PoseAffine());
       targets_cloud.points.push_back(geometry_msgs::Point32());
     }
 
     geometry_msgs::Pose pose;
+    cwru_msgs::PoseAffine pose_affine;
     geometry_msgs::Point32 pt;
 
     std_msgs::Float32 dt;
@@ -124,7 +135,7 @@ int main(int argc, char **argv)
         polaris.readDataBX(status,targets);
 
         std::map<int,TransformationDataBX>::iterator it = targets.begin();*/
-        
+        XformUtils x = XformUtils();
 	unsigned int i=0;
         for(it = targets.begin();it!=targets.end();++it)
         {
@@ -136,12 +147,26 @@ int main(int argc, char **argv)
             pose.orientation.z = it->second.qz;
             pose.orientation.w = it->second.q0;
             targets_pose.poses[i] = pose;
+            
+            pose_affine.frame_origin = roms[i];
+            pose_affine.frame_target = "polaris";
+            Eigen::Affine3d tmp_affine = x.transformPoseToEigenAffine3d(pose);
+            //TODO There has GOT to be a more efficient way to do this...
+            pose_affine.matrix = {
+            	tmp_affine.matrix()(0, 0), tmp_affine.matrix()(0, 1), tmp_affine.matrix()(0, 2), tmp_affine.matrix()(0, 3),
+            	tmp_affine.matrix()(1, 0), tmp_affine.matrix()(1, 1), tmp_affine.matrix()(1, 2), tmp_affine.matrix()(1, 3),
+            	tmp_affine.matrix()(2, 0), tmp_affine.matrix()(2, 1), tmp_affine.matrix()(2, 2), tmp_affine.matrix()(2, 3),
+            	tmp_affine.matrix()(3, 0), tmp_affine.matrix()(3, 1), tmp_affine.matrix()(3, 2), tmp_affine.matrix()(3, 3)
+            };
+            targets_affine.poses[i] = pose_affine;
 
             pt.x = it->second.tx;
             pt.y = it->second.ty;
             pt.z = it->second.tz;
             targets_cloud.points[i] = pt;
 	    i++;
+	    
+	    
         }
         
         raw_points.markers.clear();
@@ -157,7 +182,8 @@ int main(int argc, char **argv)
         targets_pose.header.stamp = ros::Time::now();
         raw_points.header.stamp = ros::Time::now();
         cloud_pub.publish(targets_cloud);
-        pose_array_pub.publish(targets_pose);
+        affine_pub.publish(targets_affine);
+        
         raw_pub.publish(raw_points);
 
         ros::spinOnce();
