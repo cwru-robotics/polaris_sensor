@@ -181,6 +181,7 @@ int main(int argc, char **argv)
         targets_cloud.header.stamp = ros::Time::now();
         targets_pose.header.stamp = ros::Time::now();
         raw_points.header.stamp = ros::Time::now();
+        targets_affine.header.stamp = ros::Time::now();
         cloud_pub.publish(targets_cloud);
         affine_pub.publish(targets_affine);
         
