@@ -184,7 +184,7 @@ int main(int argc, char **argv)
         targets_affine.header.stamp = ros::Time::now();
         cloud_pub.publish(targets_cloud);
         affine_pub.publish(targets_affine);
-        
+        pose_array_pub.publish(targets_pose);
         raw_pub.publish(raw_points);
 
         ros::spinOnce();
